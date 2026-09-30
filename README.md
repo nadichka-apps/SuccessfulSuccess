@@ -9,6 +9,17 @@ participants) and add a new one from the UI. Built to `SPEC.md`.
 - **Backend** — FastAPI + SQLAlchemy 2 (async) + Alembic
 - **Database** — PostgreSQL 17
 
+## Production
+
+### Frontend
+https://d11h0gtj3ponyb.cloudfront.net
+
+### Backend
+https://gx2743mymzepvm5tuirqh4o64a0xvhgc.lambda-url.us-east-1.on.aws
+
+### API Documentation
+https://gx2743mymzepvm5tuirqh4o64a0xvhgc.lambda-url.us-east-1.on.aws/docs
+
 ## Quick start
 
 ```bash
