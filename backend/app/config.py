@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # empty they are fetched from Cognito on first use.
     cognito_jwks: str = ""
 
+    # Weekly reports configuration
+    aws_region: str = "us-east-1"
+    reports_bucket_name: str = ""
+    reports_sender_email: str = ""
+    reports_recipient_email: str = ""
+    reports_dedup_table: str = ""
+
     @field_validator("app_timezone")
     @classmethod
     def _validate_timezone(cls, value: str) -> str:

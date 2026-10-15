@@ -25,10 +25,19 @@ def migrate() -> None:
 def handler(event, context):
     # `make aws-migrate` invokes the function directly with this payload.
     # Function URL events never carry an "action" key, so no request can.
-    if event.get("action") == "migrate":
+    action = event.get("action")
+    if action == "migrate":
         # Alembic calls asyncio.run, which closes and unsets the thread's event
         # loop when it returns. A worker thread keeps Mangum's loop untouched.
         with ThreadPoolExecutor(max_workers=1) as pool:
             pool.submit(migrate).result()
         return {"status": "migrated"}
+    if action in ("weekly_report", "build_report"):
+        from app.reports.builder import handler as builder_handler
+
+        return builder_handler(event, context)
+    if action == "send_report":
+        from app.reports.mailer import handler as mailer_handler
+
+        return mailer_handler(event, context)
     return api(event, context)

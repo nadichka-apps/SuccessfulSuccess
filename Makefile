@@ -32,13 +32,14 @@ export MSYS2_ARG_CONV_EXCL := *
 AWS ?= docker run --rm \
 	-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
 	-e AWS_DEFAULT_REGION=$(AWS_REGION) \
-	-v $(CURDIR):/aws -w /aws \
+	-v "$(CURDIR):/aws" -w /aws \
 	amazon/aws-cli:latest
 
 AUTH_STACK ?= $(PROJECT_NAME)-auth
 APP_STACK ?= $(PROJECT_NAME)-backend
 ECR_STACK ?= $(PROJECT_NAME)-ecr
 FRONTEND_STACK ?= $(PROJECT_NAME)-frontend
+REPORTS_STACK ?= $(PROJECT_NAME)-reports
 IMAGE_TAG ?= latest
 # x86_64 or arm64. arm64 is ~20% cheaper on Lambda and builds natively on
 # Apple Silicon; the image platform is derived from it so the two cannot drift.
@@ -92,9 +93,9 @@ define require-db-password
 		exit 1; }
 endef
 
-.PHONY: help up up-build down down-v logs ps migrate revision seed test lint fmt shell-backend psql \
+.PHONY: help up up-build down down-v logs ps migrate revision seed test test-reports lint fmt shell-backend psql \
         aws-whoami aws-deploy aws-deploy-auth aws-auth-env aws-ecr aws-push aws-deploy-backend aws-migrate aws-url aws-status aws-logs \
-        aws-frontend-cert aws-deploy-frontend aws-frontend-url aws-destroy
+        aws-frontend-cert aws-deploy-frontend aws-frontend-url aws-deploy-reports aws-trigger-report aws-reports-status aws-reports-logs aws-destroy
 
 help:
 	@grep -hE '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -132,6 +133,12 @@ test: ## Run the backend test suite against a throwaway database
 		"SELECT 1 FROM pg_database WHERE datname='meetings_test'" | grep -q 1 || \
 		$(COMPOSE) exec db createdb -U app meetings_test
 	$(COMPOSE) exec -e DATABASE_URL=postgresql+asyncpg://app:app@db:5432/meetings_test backend pytest -q
+
+test-reports: ## Run the report test suite against throwaway database
+	$(COMPOSE) exec db psql -U app -d postgres -tc \
+		"SELECT 1 FROM pg_database WHERE datname='meetings_test'" | grep -q 1 || \
+		$(COMPOSE) exec db createdb -U app meetings_test
+	$(COMPOSE) exec -e DATABASE_URL=postgresql+asyncpg://app:app@db:5432/meetings_test backend pytest -v tests/test_weekly_report.py tests/test_dedup.py tests/test_report_builder.py tests/test_mailer.py
 
 lint: ## Lint backend and frontend
 	$(COMPOSE) exec backend ruff check .
@@ -348,11 +355,80 @@ aws-deploy-frontend: ## Deploy the frontend to S3 + CloudFront, built against th
 aws-frontend-url: ## Print the deployed site URL
 	@$(call stack-output,$(FRONTEND_STACK),SiteUrl)
 
+aws-deploy-reports: ## Deploy the event-driven reports stack (EventBridge, SQS, S3, Lambdas, SES)
+	$(require-aws-credentials)
+	$(require-db-password)
+	@vpc=$$($(AWS) ec2 describe-vpcs --filters Name=isDefault,Values=true \
+		--query 'Vpcs[0].VpcId' --output text | tr -d '[:space:]'); \
+		subnets=$$($(AWS) ec2 describe-subnets \
+			--filters Name=vpc-id,Values=$$vpc Name=default-for-az,Values=true \
+			--query 'Subnets[].SubnetId' --output text | tr '[:space:]' ',' | sed 's/,*$$//'); \
+		routes=$$($(AWS) ec2 describe-route-tables --filters Name=vpc-id,Values=$$vpc \
+			--query 'RouteTables[].RouteTableId' --output text | tr '[:space:]' ',' | sed 's/,*$$//'); \
+		fn=$$($(call stack-output,$(APP_STACK),FunctionName) | tr -d '[:space:]'); \
+		sg=$$($(AWS) lambda get-function-configuration --function-name "$$fn" \
+			--query 'VpcConfig.SecurityGroupIds[0]' --output text | tr -d '[:space:]'); \
+		dburl=$$($(AWS) lambda get-function-configuration --function-name "$$fn" \
+			--query 'Environment.Variables.DATABASE_URL' --output text | tr -d '[:space:]'); \
+		repo=$$($(call stack-output,$(ECR_STACK),RepositoryUri) | tr -d '[:space:]'); \
+		digest=$$($(AWS) ecr describe-images --repository-name "$${repo#*/}" \
+			--image-ids imageTag=$(IMAGE_TAG) --query 'imageDetails[0].imageDigest' \
+			--output text | tr -d '[:space:]'); \
+		echo "Deploying $(REPORTS_STACK): vpc=$$vpc subnets=$$subnets sg=$$sg routes=$$routes image=$$repo@$$digest"; \
+		$(call wait-stack-idle,$(REPORTS_STACK)); \
+		$(call clear-failed-create,$(REPORTS_STACK)); \
+		$(AWS) cloudformation deploy \
+			--stack-name $(REPORTS_STACK) \
+			--template-file infra/reports.yml \
+			--capabilities CAPABILITY_IAM \
+			--no-fail-on-empty-changeset \
+			$(STACK_TAGS) \
+			--parameter-overrides \
+				"ProjectName=$(PROJECT_NAME)" \
+				"VpcId=$$vpc" \
+				"SubnetIds=$$subnets" \
+				"FunctionSecurityGroupId=$$sg" \
+				"RouteTableIds=$$routes" \
+				ImageUri="$$repo@$$digest" \
+				"DatabaseUrl=$$dburl" \
+				"AppTimezone=$(APP_TIMEZONE)" \
+				"SenderEmail=$(or $(REPORTS_SENDER_EMAIL),reports@example.com)" \
+				"RecipientEmail=$(or $(REPORTS_RECIPIENT_EMAIL),recipient@example.com)" \
+				"Architecture=$(AWS_LAMBDA_ARCH)"
+
+aws-trigger-report: ## Trigger a weekly report generation via SQS: make aws-trigger-report [week=2026-W40]
+	$(require-aws-credentials)
+	@queue=$$($(call stack-output,$(REPORTS_STACK),WeeklyReportQueueUrl) | tr -d '[:space:]'); \
+	if [ -n "$(week)" ]; then payload='{"action":"weekly_report","week":"$(week)"}'; else payload='{"action":"weekly_report"}'; fi; \
+	echo "Sending message to $$queue: $$payload"; \
+	$(AWS) sqs send-message --queue-url "$$queue" --message-body "$$payload"
+
+aws-reports-status: ## Show reports stack status, SQS queue depth, and DLQ depth
+	@echo "--- Stack Outputs ---"
+	@$(AWS) cloudformation describe-stacks --stack-name $(REPORTS_STACK) --query 'Stacks[0].Outputs' --output table
+	@q=$$($(call stack-output,$(REPORTS_STACK),WeeklyReportQueueUrl) | tr -d '[:space:]'); \
+		echo "--- WeeklyReportQueue Attributes ---"; \
+		$(AWS) sqs get-queue-attributes --queue-url "$$q" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible ApproximateNumberOfMessagesDelayed --output table
+	@dlq=$$($(call stack-output,$(REPORTS_STACK),WeeklyReportDLQUrl) | tr -d '[:space:]'); \
+		echo "--- WeeklyReportDLQ Attributes ---"; \
+		$(AWS) sqs get-queue-attributes --queue-url "$$dlq" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --output table
+
+aws-reports-logs: ## Follow CloudWatch logs for Report Builder and Mailer
+	@echo "Tailing /aws/lambda/$(PROJECT_NAME)-report-builder..."
+	$(AWS) logs tail /aws/lambda/$(PROJECT_NAME)-report-builder --follow
+
 aws-destroy: ## Delete every stack, including the database and its data
 	$(require-aws-credentials)
-	@printf 'Delete %s, %s, %s and %s? The Aurora cluster and all its data, and every user account, go with them (no snapshot). Type yes: ' \
-		"$(FRONTEND_STACK)" "$(APP_STACK)" "$(AUTH_STACK)" "$(ECR_STACK)"; \
+	@printf 'Delete %s, %s, %s, %s and %s? The Aurora cluster and all its data, and every user account, go with them (no snapshot). Type yes: ' \
+		"$(REPORTS_STACK)" "$(FRONTEND_STACK)" "$(APP_STACK)" "$(AUTH_STACK)" "$(ECR_STACK)"; \
 		read answer; test "$$answer" = "yes" || { echo "Aborted."; exit 1; }
+	@repbucket=$$($(call stack-output,$(REPORTS_STACK),ReportsBucketName) 2>/dev/null | tr -d '[:space:]'); \
+		if [ -n "$$repbucket" ] && [ "$$repbucket" != "None" ]; then \
+			echo "Emptying s3://$$repbucket"; \
+			$(AWS) s3 rm "s3://$$repbucket" --recursive --only-show-errors || true; \
+		fi
+	-$(AWS) cloudformation delete-stack --stack-name $(REPORTS_STACK)
+	-$(AWS) cloudformation wait stack-delete-complete --stack-name $(REPORTS_STACK)
 	@bucket=$$($(call stack-output,$(FRONTEND_STACK),BucketName) 2>/dev/null | tr -d '[:space:]'); \
 		if [ -n "$$bucket" ] && [ "$$bucket" != "None" ]; then \
 			echo "Emptying s3://$$bucket"; \
