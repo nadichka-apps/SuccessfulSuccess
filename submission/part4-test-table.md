@@ -43,6 +43,15 @@ as Today and `Europe/Kyiv`; latency is measured end to end for the parser call.
    with confidence intervals. Keep a held-out subset and blind human review so
    prompt-v2 is not judged only on examples used to tune it.
 
+## CloudWatch parse line
+
+Log group: `/aws/lambda/successfulsuccess-agenda-parser`  
+Timestamp: `2026-10-29T21:01:11.710Z`
+
+```json
+{"event": "agenda_parse", "outcome": "parsed", "user": "b4384418-b0b1-7046-74be-9b9e55bc0096", "model": "amazon.nova-lite-v1:0", "prompt_version": "agenda-v1", "input_tokens": 993, "output_tokens": 636, "latency_ms": 4245, "cost_usd": 0.00021222}
+```
+
 ## Remaining capture artifacts
 
 - Commit URL: https://github.com/nadichka-apps/SuccessfulSuccess/commit/f4706afbe840f2bd2b95e9b49f920ba0194a74c2
