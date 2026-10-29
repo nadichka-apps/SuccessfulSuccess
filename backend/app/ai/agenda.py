@@ -377,7 +377,9 @@ def _response(code: int, body: dict[str, Any]) -> dict[str, Any]:
 
 def _log_parse(user: str, usage: dict[str, int] | None, started: float, outcome: str) -> None:
     usage_fields = usage or {"input_tokens": None, "output_tokens": None}
-    logger.info(json.dumps({
+    # Write to stdout directly so Lambda's runtime always records the JSON line,
+    # even when its root logger filters INFO messages.
+    print(json.dumps({
         "event": "agenda_parse", "outcome": outcome, "user": user,
         "model": settings.parser_model, "prompt_version": PROMPT_VERSION, **usage_fields,
         "latency_ms": int((time.monotonic() - started) * 1000),

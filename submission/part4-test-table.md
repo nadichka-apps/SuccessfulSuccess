@@ -48,8 +48,9 @@ as Today and `Europe/Kyiv`; latency is measured end to end for the parser call.
 - Commit URL: https://github.com/nadichka-apps/SuccessfulSuccess/commit/f4706afbe840f2bd2b95e9b49f920ba0194a74c2
 - Screen recording (≤45 seconds): still requires one signed-in UI run and a
   recording of paste, review, correction, and save.
-- CloudWatch parse log line: the five Bedrock model runs were evaluated from the
-  container, not invoked through the authenticated parser URL; capture a
-  successful Lambda parse after signing in to produce the Lambda log line.
+- CloudWatch parse log line: the signed-in app reached Lambda, but its first
+  invocations had only Lambda START/END records because Python INFO logs were
+  filtered. The logger now prints the metrics JSON to stdout; run **Parse** once
+  more to create the requested CloudWatch line.
 - AWS budget: `successfulsuccess-monthly-5-dollar` was created in us-east-1,
   with $5 monthly limit and email notifications directed to the supplied address.
