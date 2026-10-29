@@ -3,8 +3,12 @@
 ## Five deployed parses
 
 This table must be filled from actual deployed screen runs. No model outputs are
-fabricated here. The current environment has not been authenticated to AWS, so
-these entries remain pending deployment and Bedrock access.
+fabricated here. AWS authentication is configured and the backend image was
+built and pushed, but parsing is blocked by Bedrock account access. A direct
+`AnthropicBedrockMantle` hello call returned HTTP 403:
+`anthropic.claude-opus-5-5 is not available for this account`; Bedrock reports
+`agreementAvailability.status=NOT_AVAILABLE`. The app parser was not deployed
+or called, so the five results remain pending model access.
 
 | # | Input (short) | JSON produced | Correct fields | Invented values | Tokens in / out | Cost, $ | Latency, s |
 |---|---|---|---|---|---|---|---|
@@ -20,7 +24,7 @@ these entries remain pending deployment and Bedrock access.
    measured outputs.** Use the distinction from the lab: schema for invalid
    shape/ranges, validation for rejected values, prompt for extraction errors,
    and UI for review/correction of plausible but wrong suggestions.
-2. Injection attempt: **Pending the observed output.** The blast radius is
+2. Injection attempt: **No model output yet.** The blast radius is
    limited because the parser has no database/write capability, its response is
    only a suggestion, the UI requires a human save, and the existing API still
    validates the final meeting.
@@ -37,6 +41,8 @@ these entries remain pending deployment and Bedrock access.
 
 ## Remaining capture artifacts
 
-- Commit URL: available after the changes are committed and pushed.
+- Commit URL: https://github.com/nadichka-apps/SuccessfulSuccess/commit/f4706afbe840f2bd2b95e9b49f920ba0194a74c2
 - Screen recording (≤45 seconds): capture after deploying and signing in.
 - CloudWatch parse log line: capture after one successful deployed parse.
+- AWS budget: `successfulsuccess-monthly-5-dollar` was created in us-east-1,
+  with $5 monthly limit and email notifications directed to the supplied address.
