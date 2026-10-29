@@ -45,7 +45,8 @@ as Today and `Europe/Kyiv`; latency is measured end to end for the parser call.
 
 ## CloudWatch parse line
 
-Log group: `/aws/lambda/successfulsuccess-agenda-parser`  
+Log group: `/aws/lambda/successfulsuccess-agenda-parser`
+
 Timestamp: `2026-10-29T21:01:11.710Z`
 
 ```json
