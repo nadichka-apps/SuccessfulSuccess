@@ -30,7 +30,7 @@ export default function PrivacyPolicy() {
         </h2>
         <p>
           We use this information to provide authentication, operate the
-          application, and provide the application's functionality.
+            application, and provide the application&apos;s functionality.
         </p>
       </section>
 

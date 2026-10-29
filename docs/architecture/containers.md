@@ -5,12 +5,12 @@ flowchart LR
   person[Person]
   browser[Browser\nNext.js static app]
   parser[Agenda parser\nLambda URL, outside VPC]
-  bedrock[Amazon Bedrock\nClaude Opus 5.5]
+  bedrock[Amazon Bedrock\nNova Lite]
   api[Meetings API\nFastAPI Lambda, in VPC]
   db[(Aurora PostgreSQL)]
   person --> browser
   browser -->|parse: text + Cognito token| parser
-  parser -->|record_agenda tool request| bedrock
+  parser -->|record_agenda Converse tool| bedrock
   bedrock -->|structured suggestion| parser
   browser -->|save: reviewed meeting + suggestion| api
   api -->|validated write| db

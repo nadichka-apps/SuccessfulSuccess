@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Authenticated, database-free agenda parser Lambda outside the VPC. Calls
-  Claude through Amazon Bedrock Mantle and never writes meeting data.
+  Amazon Nova Lite through the Bedrock Converse API; never writes meeting data.
 
 Parameters:
   ProjectName:
@@ -9,7 +9,7 @@ Parameters:
     Default: successfulsuccess
   ParserModel:
     Type: String
-    Default: anthropic.claude-opus-5-5
+    Default: amazon.nova-lite-v1:0
   ImageUri:
     Type: String
     Description: Lambda container image URI containing backend/app/ai/agenda.py.
@@ -40,7 +40,7 @@ Resources:
                 Action: [logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-agenda-parser:*"
               - Effect: Allow
-                Action: bedrock-mantle:CreateInference
+                Action: bedrock:InvokeModel
                 Resource: "*"
       Tags:
         - Key: PROJECT_NAME
@@ -59,7 +59,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${ProjectName}-agenda-parser"
-      Description: Parse pasted agenda text with Claude on Amazon Bedrock
+      Description: Parse pasted agenda text with Amazon Nova on Amazon Bedrock
       PackageType: Image
       Code:
         ImageUri: !Ref ImageUri

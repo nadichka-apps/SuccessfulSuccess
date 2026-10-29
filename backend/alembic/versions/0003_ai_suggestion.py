@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0003_ai_suggestion"
-down_revision = "0002_users_and_meeting_owner"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
 

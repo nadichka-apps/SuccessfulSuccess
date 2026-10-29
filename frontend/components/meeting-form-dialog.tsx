@@ -200,13 +200,17 @@ export function MeetingFormDialog({
   useEffect(() => {
     if (open) {
       reset(defaultValues(meeting))
-      if (!meeting) {
-        setSuggestion(null)
-        setPastedText("")
-        setParseMessage("")
-      }
     }
   }, [open, meeting, reset])
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen && !meeting) {
+      setSuggestion(null)
+      setPastedText("")
+      setParseMessage("")
+    }
+    onOpenChange(nextOpen)
+  }
 
   const onSubmit = handleSubmit(async (values) => {
     const participants = values.participants
@@ -258,7 +262,7 @@ export function MeetingFormDialog({
   })
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit meeting" : "New meeting"}</DialogTitle>

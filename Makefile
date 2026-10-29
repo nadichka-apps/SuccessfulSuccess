@@ -375,7 +375,7 @@ aws-deploy-ai: aws-push ## Deploy the isolated Bedrock agenda parser and print i
 		test -n "$$pool" -a -n "$$client" || { echo "Run make aws-deploy-auth first"; exit 1; }; \
 		$(AWS) cloudformation deploy --stack-name $(AI_STACK) --template-file infra/ai.yml \
 			--capabilities CAPABILITY_IAM --no-fail-on-empty-changeset $(STACK_TAGS) \
-			--parameter-overrides "ProjectName=$(PROJECT_NAME)" "ParserModel=$(or $(PARSER_MODEL),anthropic.claude-opus-5-5)" \
+			--parameter-overrides "ProjectName=$(PROJECT_NAME)" "ParserModel=$(or $(PARSER_MODEL),amazon.nova-lite-v1:0)" \
 			"ImageUri=$$repo:$(IMAGE_TAG)" "CognitoUserPoolId=$$pool" "CognitoClientId=$$client" \
 			"AllowedOrigin=$${site:-*}"; \
 		$(call stack-output,$(AI_STACK),ParserUrl)

@@ -1,20 +1,19 @@
-"""Small local smoke call to Claude through Amazon Bedrock Mantle."""
+"""Small local smoke call to Amazon Nova through Bedrock Converse."""
 
-from anthropic import AnthropicBedrockMantle
+import boto3
 
 from app.config import settings
 
 
 def main() -> None:
-    client = AnthropicBedrockMantle(aws_region=settings.parser_region)
-    message = client.messages.create(
-        model=settings.parser_model,
-        max_tokens=128,
-        output_config={"effort": "low"},
-        messages=[{"role": "user", "content": "In one sentence: what is an ISO week?"}],
+    client = boto3.client("bedrock-runtime", region_name=settings.parser_region)
+    message = client.converse(
+        modelId=settings.parser_model,
+        inferenceConfig={"maxTokens": 128, "temperature": 0},
+        messages=[{"role": "user", "content": [{"text": "In one sentence: what is an ISO week?"}]}],
     )
-    print(next(block.text for block in message.content if block.type == "text"))
-    print(f"stop_reason={message.stop_reason} input_tokens={message.usage.input_tokens} output_tokens={message.usage.output_tokens}")
+    print(next(block["text"] for block in message["output"]["message"]["content"] if "text" in block))
+    print(f"stop_reason={message['stopReason']} input_tokens={message['usage']['inputTokens']} output_tokens={message['usage']['outputTokens']}")
 
 
 if __name__ == "__main__":
