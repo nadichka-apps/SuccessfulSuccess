@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     reports_sender_email: str = ""
     reports_recipient_email: str = ""
     reports_dedup_table: str = ""
+    parser_region: str = "us-east-1"
+    parser_model: str = "anthropic.claude-opus-5-5"
 
     @field_validator("app_timezone")
     @classmethod

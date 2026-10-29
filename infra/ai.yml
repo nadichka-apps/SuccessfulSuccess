@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Authenticated, database-free agenda parser Lambda outside the VPC. Calls
+  Claude through Amazon Bedrock Mantle and never writes meeting data.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: successfulsuccess
+  ParserModel:
+    Type: String
+    Default: anthropic.claude-opus-5-5
+  ImageUri:
+    Type: String
+    Description: Lambda container image URI containing backend/app/ai/agenda.py.
+  CognitoUserPoolId:
+    Type: String
+  CognitoClientId:
+    Type: String
+  AllowedOrigin:
+    Type: String
+    Default: "*"
+
+Resources:
+  ParserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: parser-logs-and-bedrock
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-agenda-parser:*"
+              - Effect: Allow
+                Action: bedrock-mantle:CreateInference
+                Resource: "*"
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  ParserLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-agenda-parser"
+      RetentionInDays: 30
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  ParserFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-agenda-parser"
+      Description: Parse pasted agenda text with Claude on Amazon Bedrock
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      ImageConfig:
+        Command: ["app.ai.agenda.handler"]
+      Architectures: [x86_64]
+      Role: !GetAtt ParserRole.Arn
+      MemorySize: 512
+      Timeout: 30
+      LoggingConfig:
+        LogGroup: !Ref ParserLogGroup
+      Environment:
+        Variables:
+          PARSER_MODEL: !Ref ParserModel
+          PARSER_REGION: !Ref AWS::Region
+          COGNITO_REGION: !Ref AWS::Region
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  ParserUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt ParserFunction.Arn
+      AuthType: NONE
+      Cors:
+        AllowOrigins: [!Ref AllowedOrigin]
+        AllowMethods: [POST]
+        AllowHeaders: [authorization, content-type]
+        MaxAge: 600
+
+  ParserUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ParserFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  ParserInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ParserFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+Outputs:
+  ParserUrl:
+    Value: !GetAtt ParserUrl.FunctionUrl
+  ParserFunctionName:
+    Value: !Ref ParserFunction

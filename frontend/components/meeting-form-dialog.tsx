@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { CalendarIcon } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
 import { useCreateMeeting, useUpdateMeeting } from "@/hooks/use-meetings"
-import { ApiError } from "@/lib/api"
+import { ApiError, parseAgenda } from "@/lib/api"
 import { formatTime, parseIsoDay, toIsoDate, toIsoWithOffset } from "@/lib/datetime"
 import type { Meeting } from "@/lib/types"
 
@@ -122,6 +122,11 @@ export function MeetingFormDialog({
   const createMeeting = useCreateMeeting()
   const updateMeeting = useUpdateMeeting()
   const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [pastedText, setPastedText] = useState("")
+  const [suggestion, setSuggestion] = useState<{ agenda: unknown; model: string; prompt_version: string } | null>(null)
+  const [parseMessage, setParseMessage] = useState("")
+  const [parsing, setParsing] = useState(false)
+  const parseController = useRef<AbortController | null>(null)
   const isEdit = !!meeting
 
   const form = useForm<FormValues>({
@@ -138,9 +143,69 @@ export function MeetingFormDialog({
     formState: { errors, isSubmitting },
   } = form
 
+  const applySuggestion = async () => {
+    parseController.current?.abort()
+    const controller = new AbortController()
+    parseController.current = controller
+    setParsing(true)
+    setParseMessage("Parsing agenda… this usually takes a few seconds.")
+    try {
+      const result = await parseAgenda(pastedText, controller.signal)
+      const agenda = result.agenda
+      if (agenda.title) form.setValue("name", agenda.title)
+      if (agenda.starts_at) {
+        const start = new Date(agenda.starts_at)
+        if (!Number.isNaN(start.getTime())) {
+          form.setValue("date", start)
+          form.setValue("startTime", formatTime(agenda.starts_at))
+        }
+      }
+      if (agenda.duration_minutes) {
+        const startTime = form.getValues("startTime")
+        const [hour, minute] = startTime.split(":").map(Number)
+        const end = new Date(2000, 0, 1, hour, minute + agenda.duration_minutes)
+        form.setValue("endTime", `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`)
+      }
+      const description = [
+        ...agenda.items.map((item, index) => `${index + 1}. ${item.topic}${item.owner ? ` — ${item.owner}` : ""}${item.minutes ? ` (${item.minutes} min)` : ""}`),
+        ...agenda.action_items.map((item) => `Action: ${item.task}${item.owner ? ` — ${item.owner}` : ""}${item.due ? ` (due ${item.due})` : ""}`),
+      ].join("\n")
+      if (description) form.setValue("description", description)
+      const owners = [...new Set([...agenda.items.map((i) => i.owner), ...agenda.action_items.map((i) => i.owner)].filter((name): name is string => !!name))]
+      if (owners.length) form.setValue("participants", owners.map((name) => ({ name, email: "" })))
+      setSuggestion({ agenda, model: result.model, prompt_version: result.prompt_version })
+      setParseMessage("Review the suggested fields, edit anything that needs correction, then save.")
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setParseMessage("Parsing cancelled. You can enter the meeting by hand.")
+      } else {
+        const message = error instanceof ApiError && error.status === 413
+          ? "Text is too long. Keep it under 10,000 characters."
+          : error instanceof ApiError && error.status === 429
+            ? "The parser is busy. Please try again shortly."
+            : error instanceof ApiError && error.status === 0
+              ? "Network error. You can enter the meeting by hand."
+              : error instanceof ApiError && error.status === 422
+                ? "No agenda found in that text. You can enter the meeting by hand."
+                : "Agenda parsing is unavailable. You can enter the meeting by hand."
+        setParseMessage(message)
+      }
+    } finally {
+      setParsing(false)
+      parseController.current = null
+    }
+  }
+
   // Refill the form each time it opens, so edits start from the meeting's current values.
   useEffect(() => {
-    if (open) reset(defaultValues(meeting))
+    if (open) {
+      reset(defaultValues(meeting))
+      if (!meeting) {
+        setSuggestion(null)
+        setPastedText("")
+        setParseMessage("")
+      }
+    }
   }, [open, meeting, reset])
 
   const onSubmit = handleSubmit(async (values) => {
@@ -158,6 +223,7 @@ export function MeetingFormDialog({
       starts_at: toIsoWithOffset(values.date, values.startTime),
       ends_at: toIsoWithOffset(values.date, values.endTime),
       participants,
+      ai_suggestion: suggestion ?? meeting?.ai_suggestion ?? null,
     }
 
     try {
@@ -204,8 +270,19 @@ export function MeetingFormDialog({
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4">
+          {!isEdit ? (
+            <section className="space-y-2 rounded-lg border p-3">
+              <Label htmlFor="pasted-agenda">Paste an agenda</Label>
+              <Textarea id="pasted-agenda" rows={4} value={pastedText} onChange={(event) => setPastedText(event.target.value)} placeholder="Paste an email, chat message, or meeting notes…" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" disabled={parsing || !pastedText.trim()} onClick={applySuggestion}>{parsing ? "Parsing…" : "Parse"}</Button>
+                {parsing ? <Button type="button" variant="ghost" onClick={() => parseController.current?.abort()}>Cancel</Button> : null}
+              </div>
+              {parseMessage ? <p role="status" className="text-muted-foreground text-sm">{parseMessage}</p> : null}
+            </section>
+          ) : null}
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Name{suggestion && !form.formState.dirtyFields.name ? <span className="ml-2 text-xs text-muted-foreground">suggested</span> : null}</Label>
             <Input
               id="name"
               placeholder="Sprint planning"
@@ -221,7 +298,7 @@ export function MeetingFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Description{suggestion && !form.formState.dirtyFields.description ? <span className="ml-2 text-xs text-muted-foreground">suggested</span> : null}</Label>
             <Textarea
               id="description"
               rows={3}
@@ -240,7 +317,7 @@ export function MeetingFormDialog({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2 sm:col-span-1">
-              <Label>Date</Label>
+              <Label>Date{suggestion && !form.formState.dirtyFields.date ? <span className="ml-2 text-xs text-muted-foreground">suggested</span> : null}</Label>
               <Controller
                 control={control}
                 name="date"
@@ -273,7 +350,7 @@ export function MeetingFormDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="startTime">Start</Label>
+              <Label htmlFor="startTime">Start{suggestion && !form.formState.dirtyFields.startTime ? <span className="ml-2 text-xs text-muted-foreground">suggested</span> : null}</Label>
               <Input id="startTime" type="time" step={900} {...register("startTime")} />
               {errors.startTime ? (
                 <p className="text-destructive text-sm">{errors.startTime.message}</p>
@@ -281,7 +358,7 @@ export function MeetingFormDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="endTime">End</Label>
+              <Label htmlFor="endTime">End{suggestion && !form.formState.dirtyFields.endTime ? <span className="ml-2 text-xs text-muted-foreground">suggested</span> : null}</Label>
               <Input id="endTime" type="time" step={900} {...register("endTime")} />
               {errors.endTime ? (
                 <p className="text-destructive text-sm">{errors.endTime.message}</p>
@@ -300,6 +377,7 @@ export function MeetingFormDialog({
               />
             )}
           />
+          {suggestion && !form.formState.dirtyFields.participants ? <p className="text-muted-foreground text-xs">Participants suggested</p> : null}
           {errors.participants?.message ? (
             <p className="text-destructive text-sm">{errors.participants.message}</p>
           ) : null}

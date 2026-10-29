@@ -40,6 +40,7 @@ APP_STACK ?= $(PROJECT_NAME)-backend
 ECR_STACK ?= $(PROJECT_NAME)-ecr
 FRONTEND_STACK ?= $(PROJECT_NAME)-frontend
 REPORTS_STACK ?= $(PROJECT_NAME)-reports
+AI_STACK ?= $(PROJECT_NAME)-ai
 IMAGE_TAG ?= latest
 # x86_64 or arm64. arm64 is ~20% cheaper on Lambda and builds natively on
 # Apple Silicon; the image platform is derived from it so the two cannot drift.
@@ -93,9 +94,9 @@ define require-db-password
 		exit 1; }
 endef
 
-.PHONY: help up up-build down down-v logs ps migrate revision seed test test-reports lint fmt shell-backend psql \
+.PHONY: help up up-build down down-v logs ps migrate revision seed test test-reports lint fmt shell-backend psql llm-hello parse \
         aws-whoami aws-deploy aws-deploy-auth aws-auth-env aws-ecr aws-push aws-deploy-backend aws-migrate aws-url aws-status aws-logs \
-        aws-frontend-cert aws-deploy-frontend aws-frontend-url aws-deploy-reports aws-trigger-report aws-reports-status aws-reports-logs aws-destroy
+        aws-frontend-cert aws-deploy-frontend aws-frontend-url aws-deploy-ai aws-deploy-budget aws-deploy-reports aws-trigger-report aws-reports-status aws-reports-logs aws-destroy
 
 help:
 	@grep -hE '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -153,6 +154,13 @@ shell-backend: ## Open a shell in the backend container
 psql: ## Open psql against the application database
 	$(COMPOSE) exec db psql -U app -d meetings
 
+llm-hello: ## Make a first Claude call through Amazon Bedrock using local AWS credentials
+	cd backend && uv run python -m app.ai.hello
+
+parse: ## Parse a sample agenda locally: make parse TEXT='Monday 10:00 pricing sync, 45 min'
+	@test -n "$(TEXT)" || { echo "Pass TEXT='agenda text'"; exit 1; }
+	cd backend && uv run python -m app.ai.agenda "$(TEXT)"
+
 aws-whoami: ## Verify the AWS credentials in .env
 	$(require-aws-credentials)
 	$(AWS) sts get-caller-identity
@@ -160,6 +168,7 @@ aws-whoami: ## Verify the AWS credentials in .env
 aws-deploy: ## Deploy everything: sign-in, then the backend, then the frontend built against both
 	@$(MAKE) --no-print-directory aws-deploy-auth
 	@$(MAKE) --no-print-directory aws-deploy-backend
+	@$(MAKE) --no-print-directory aws-deploy-ai
 	@$(MAKE) --no-print-directory aws-deploy-frontend
 
 aws-deploy-auth: ## Create/update the Cognito user pool (email + password; Google when GOOGLE_CLIENT_ID is set)
@@ -323,6 +332,7 @@ aws-deploy-frontend: ## Deploy the frontend to S3 + CloudFront, built against th
 		auth=$$($(call stack-outputs,$(AUTH_STACK)) | tr -d '\r'); \
 		auth_out() { printf '%s\n' "$$auth" | awk -F '\t' -v k="$$1" '$$1 == k { print $$2 }'; }; \
 		bucket=$$($(call stack-output,$(FRONTEND_STACK),BucketName) | tr -d '[:space:]'); \
+		parser=$$($(call stack-output,$(AI_STACK),ParserUrl) 2>/dev/null | tr -d '[:space:]'); \
 		dist=$$($(call stack-output,$(FRONTEND_STACK),DistributionId) | tr -d '[:space:]'); \
 		echo "Building the static export against $$api"; \
 		rm -rf frontend/out; \
@@ -332,6 +342,7 @@ aws-deploy-frontend: ## Deploy the frontend to S3 + CloudFront, built against th
 			--build-arg NEXT_PUBLIC_COGNITO_CLIENT_ID="$$(auth_out UserPoolClientId)" \
 			--build-arg NEXT_PUBLIC_COGNITO_DOMAIN="$$(auth_out HostedDomain)" \
 			--build-arg NEXT_PUBLIC_COGNITO_GOOGLE_ENABLED="$$(auth_out GoogleEnabled)" \
+			--build-arg NEXT_PUBLIC_AGENDA_PARSER_URL="$$parser" \
 			./frontend || exit 1; \
 		echo "Uploading to s3://$$bucket"; \
 		$(AWS) s3 sync frontend/out "s3://$$bucket" --delete --exclude "*.html" \
@@ -354,6 +365,27 @@ aws-deploy-frontend: ## Deploy the frontend to S3 + CloudFront, built against th
 
 aws-frontend-url: ## Print the deployed site URL
 	@$(call stack-output,$(FRONTEND_STACK),SiteUrl)
+
+aws-deploy-ai: aws-push ## Deploy the isolated Bedrock agenda parser and print its URL
+	$(require-aws-credentials)
+	@pool=$$($(call stack-output,$(AUTH_STACK),UserPoolId) | tr -d '[:space:]'); \
+		client=$$($(call stack-output,$(AUTH_STACK),UserPoolClientId) | tr -d '[:space:]'); \
+		repo=$$($(call stack-output,$(ECR_STACK),RepositoryUri) | tr -d '[:space:]'); \
+		site=$$($(call stack-output,$(FRONTEND_STACK),SiteUrl) 2>/dev/null | tr -d '[:space:]'); \
+		test -n "$$pool" -a -n "$$client" || { echo "Run make aws-deploy-auth first"; exit 1; }; \
+		$(AWS) cloudformation deploy --stack-name $(AI_STACK) --template-file infra/ai.yml \
+			--capabilities CAPABILITY_IAM --no-fail-on-empty-changeset $(STACK_TAGS) \
+			--parameter-overrides "ProjectName=$(PROJECT_NAME)" "ParserModel=$(or $(PARSER_MODEL),anthropic.claude-opus-5-5)" \
+			"ImageUri=$$repo:$(IMAGE_TAG)" "CognitoUserPoolId=$$pool" "CognitoClientId=$$client" \
+			"AllowedOrigin=$${site:-*}"; \
+		$(call stack-output,$(AI_STACK),ParserUrl)
+
+aws-deploy-budget: ## Create the $5 monthly AWS cost alert: make aws-deploy-budget ALERT_EMAIL=you@example.com
+	$(require-aws-credentials)
+	@test -n "$(ALERT_EMAIL)" || { echo "Set ALERT_EMAIL=you@example.com"; exit 1; }
+	$(AWS) cloudformation deploy --stack-name $(PROJECT_NAME)-budget --template-file infra/budget.yml \
+		--no-fail-on-empty-changeset $(STACK_TAGS) --parameter-overrides \
+		"ProjectName=$(PROJECT_NAME)" "AlertEmail=$(ALERT_EMAIL)"
 
 aws-deploy-reports: ## Deploy the event-driven reports stack (EventBridge, SQS, S3, Lambdas, SES)
 	$(require-aws-credentials)

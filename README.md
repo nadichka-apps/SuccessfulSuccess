@@ -11,6 +11,11 @@ participants) and add a new one from the UI. Built to `SPEC.md`.
 
 ## Production
 
+### Architecture
+
+The current C4 level 2 container view, including agenda parsing, is in
+[`docs/architecture/containers.md`](docs/architecture/containers.md).
+
 ### Frontend
 https://d11h0gtj3ponyb.cloudfront.net
 

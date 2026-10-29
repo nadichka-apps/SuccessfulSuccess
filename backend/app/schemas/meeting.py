@@ -47,6 +47,7 @@ class MeetingCreate(BaseModel):
     starts_at: datetime
     ends_at: datetime
     participants: list[ParticipantCreate] = Field(default_factory=list)
+    ai_suggestion: dict | None = None
 
     @field_validator("name")
     @classmethod
@@ -103,6 +104,7 @@ class MeetingRead(BaseModel):
     starts_at: datetime
     ends_at: datetime
     participants: list[ParticipantRead]
+    ai_suggestion: dict | None = None
     created_at: datetime
     updated_at: datetime
 

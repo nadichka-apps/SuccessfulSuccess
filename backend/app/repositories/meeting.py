@@ -62,6 +62,7 @@ class MeetingRepository:
             location=payload.location,
             starts_at=payload.starts_at,
             ends_at=payload.ends_at,
+            ai_suggestion=payload.ai_suggestion,
             participants=[
                 Participant(name=p.name, email=p.email, position=index)
                 for index, p in enumerate(payload.participants)
@@ -79,6 +80,7 @@ class MeetingRepository:
         meeting.location = payload.location
         meeting.starts_at = payload.starts_at
         meeting.ends_at = payload.ends_at
+        meeting.ai_suggestion = payload.ai_suggestion
         meeting.participants = [
             Participant(name=p.name, email=p.email, position=index)
             for index, p in enumerate(payload.participants)

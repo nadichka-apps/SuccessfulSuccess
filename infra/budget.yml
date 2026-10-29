@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Monthly $5 AWS cost alert for SuccessfulSuccess.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: successfulsuccess
+  AlertEmail:
+    Type: String
+    Description: Address that should receive monthly budget notifications.
+    AllowedPattern: ".+@.+\\..+"
+    ConstraintDescription: Enter a valid email address.
+
+Resources:
+  MonthlyFiveDollarBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-monthly-5-dollar"
+        BudgetLimit:
+          Amount: 5
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+      ResourceTags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName

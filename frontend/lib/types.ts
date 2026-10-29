@@ -15,6 +15,7 @@ export type Meeting = {
   starts_at: string
   ends_at: string
   participants: Participant[]
+  ai_suggestion: { agenda: unknown; model: string; prompt_version: string } | null
   created_at: string
   updated_at: string
 }
@@ -39,6 +40,7 @@ export type MeetingCreateInput = {
   starts_at: string
   ends_at: string
   participants: ParticipantInput[]
+  ai_suggestion?: { agenda: unknown; model: string; prompt_version: string } | null
 }
 
 export type ApiErrorDetail = {
