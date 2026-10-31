@@ -1,0 +1,12 @@
+project_name               = "successfulsuccess"
+region                     = "us-east-1"
+app_urls                   = ["http://localhost:3000/", "https://d11h0gtj3ponyb.cloudfront.net/"]
+google_client_id           = "534221441170-u387673c75k9dj5e3t2s0q42r59ikqsb.apps.googleusercontent.com"
+vpc_id                     = "vpc-074eed6749378a29a"
+subnet_ids                 = ["subnet-0646617741416e072", "subnet-0c4fe12b49416e286", "subnet-055d9a0ba22746baf", "subnet-0addf225e7a2762b0", "subnet-0a25ff6f2c389281e", "subnet-01c3f6c02cd5fd88c"]
+function_security_group_id = "sg-0be98ea749236c0cb"
+route_table_ids            = ["rtb-007a4bca1a5db93cc"]
+app_timezone               = "Europe/Kyiv"
+log_level                  = "INFO"
+parser_model               = "amazon.nova-lite-v1:0"
+allowed_origin             = "https://d11h0gtj3ponyb.cloudfront.net"

@@ -15,3 +15,11 @@ next-env.d.ts
 .env*.local
 .idea/
 .DS_Store
+
+# Terraform local working data and state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log

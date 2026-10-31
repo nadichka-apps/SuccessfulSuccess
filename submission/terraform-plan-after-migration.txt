@@ -1,0 +1,66 @@
+Running plan in HCP Terraform. Output will stream here. Pressing Ctrl-C
+will stop streaming the logs, but will not stop the plan running remotely.
+
+Preparing the remote plan...
+
+The remote workspace is configured to work with configuration at
+infra relative to the target repository.
+
+Terraform will upload the contents of the following directory,
+excluding files or directories as defined by a .terraformignore file
+at C:\Users\A755~1\AppData\Local\Temp\successful-success-hcp-2e985fc646484a748866bf7826992c46/.terraformignore (if it is present),
+in order to capture the filesystem context the remote workspace expects:
+    C:\Users\A755~1\AppData\Local\Temp\successful-success-hcp-2e985fc646484a748866bf7826992c46
+
+To view this run in a browser, visit:
+https://app.terraform.io/app/successful-success/successful-success/runs/run-QNVgM4EpfvnyZrSQ
+
+Waiting for the plan to start...
+
+Terraform v1.17.1
+on linux_amd64
+
+Initializing plugins and modules...
+aws_lambda_permission.mailer: Refreshing state... [id=successfulsuccess-reports-MailerLambdaPermission-1NYE9ZflHjBd]
+aws_sqs_queue.dlq: Refreshing state... [id=https://sqs.us-east-1.amazonaws.com/063280428772/successfulsuccess-weekly-report-dlq]
+aws_sqs_queue.weekly: Refreshing state... [id=https://sqs.us-east-1.amazonaws.com/063280428772/successfulsuccess-weekly-report-queue]
+aws_lambda_function_url.parser: Refreshing state... [id=successfulsuccess-agenda-parser]
+aws_iam_role.parser: Refreshing state... [id=successfulsuccess-ai-ParserRole-gAkYZpgpzp9K]
+aws_iam_role.scheduler: Refreshing state... [id=successfulsuccess-reports-SchedulerRole-s9lVUe0CkCw8]
+aws_cognito_user_pool.main: Refreshing state... [id=us-east-1_xJNDWES9G]
+aws_cloudwatch_log_group.parser: Refreshing state... [id=/aws/lambda/successfulsuccess-agenda-parser]
+aws_iam_role.mailer: Refreshing state... [id=successfulsuccess-reports-MailerRole-WjBAykDHxXpK]
+data.aws_caller_identity.current: Refreshing...
+data.aws_caller_identity.current: Refresh complete after 0s [id=063280428772]
+aws_lambda_permission.parser_invoke: Refreshing state... [id=successfulsuccess-ai-ParserInvokePermission-p191vDCpvRPI]
+aws_cloudwatch_log_group.builder: Refreshing state... [id=/aws/lambda/successfulsuccess-report-builder]
+aws_sqs_queue_policy.weekly: Refreshing state... [id=https://sqs.us-east-1.amazonaws.com/063280428772/successfulsuccess-weekly-report-queue]
+aws_iam_role.builder: Refreshing state... [id=successfulsuccess-reports-ReportBuilderRole-pNI7yaHl2Cal]
+aws_vpc_endpoint.s3_gateway: Refreshing state... [id=vpce-01e09fb36216e197c]
+aws_lambda_permission.parser_url: Refreshing state... [id=successfulsuccess-ai-ParserUrlPermission-xyopWtCYAG0U]
+aws_dynamodb_table.dedup: Refreshing state... [id=successfulsuccess-reports-dedup]
+aws_scheduler_schedule.weekly: Refreshing state... [id=default/successfulsuccess-weekly-schedule]
+aws_cloudwatch_log_group.mailer: Refreshing state... [id=/aws/lambda/successfulsuccess-report-mailer]
+aws_s3_bucket.reports: Refreshing state... [id=successfulsuccess-reports-063280428772]
+aws_lambda_event_source_mapping.builder: Refreshing state... [id=3de5cfdf-706a-4738-9e26-5b7ecceb506b]
+aws_lambda_function.builder: Refreshing state... [id=successfulsuccess-report-builder]
+aws_lambda_function.mailer: Refreshing state... [id=successfulsuccess-report-mailer]
+aws_cognito_user_pool_client.web: Refreshing state... [id=77ess88i5f7u17kkauvja1nqvr]
+aws_cognito_identity_provider.google: Refreshing state... [id=us-east-1_xJNDWES9G:Google]
+aws_cognito_user_pool_domain.main: Refreshing state... [id=successfulsuccess-063280428772]
+aws_lambda_function.parser: Refreshing state... [id=successfulsuccess-agenda-parser]
+aws_s3_bucket_public_access_block.reports: Refreshing state... [id=successfulsuccess-reports-063280428772]
+aws_s3_bucket_lifecycle_configuration.reports: Refreshing state... [id=successfulsuccess-reports-063280428772]
+aws_s3_bucket_ownership_controls.reports: Refreshing state... [id=successfulsuccess-reports-063280428772]
+aws_s3_bucket_server_side_encryption_configuration.reports: Refreshing state... [id=successfulsuccess-reports-063280428772]
+aws_s3_bucket_notification.reports: Refreshing state... [id=successfulsuccess-reports-063280428772]
+
+No changes. Your infrastructure matches the configuration.
+
+Terraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.

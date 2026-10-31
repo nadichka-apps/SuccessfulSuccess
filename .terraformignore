@@ -1,0 +1,24 @@
+# Keep local credentials and non-infrastructure project files out of remote runs.
+.env
+.env.*
+.aws/
+.codex/
+.git/
+backend/
+frontend/
+infra-bootstrap/
+submission/
+.tf-migration-draft/
+reports-list.txt
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+.terraform/
+**/.terraform/
+infra/.terraform
+infra/.terraform/**
+**/.terraform
+**/.terraform/**
+infra-bootstrap/.terraform/**
+.tf-migration-draft/.terraform/**
